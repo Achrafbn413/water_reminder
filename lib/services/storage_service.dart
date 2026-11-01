@@ -7,17 +7,16 @@ class StorageService {
   static const _profileKey = 'profile';
   static const _planDayKey = 'plan_day';
 
-  static String dayKey(DateTime d) {
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '${d.year}-$m-$day';
+  static String dayKey(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 
-  static String _intakeKey(DateTime d) => 'intake_${dayKey(d)}';
-  static String _goalKey(DateTime d) => 'goal_${dayKey(d)}';
-  static String _logKey(DateTime d) => 'log_${dayKey(d)}';
+  static String _intakeKey(DateTime date) => 'intake_${dayKey(date)}';
+  static String _goalKey(DateTime date) => 'goal_${dayKey(date)}';
+  static String _logKey(DateTime date) => 'log_${dayKey(date)}';
 
-  /// reload() : les valeurs peuvent avoir été modifiées par la notification.
   static Future<SharedPreferences> _prefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -26,19 +25,22 @@ class StorageService {
 
   static Future<UserProfile?> loadProfile() async {
     final prefs = await _prefs();
-    final s = prefs.getString(_profileKey);
-    if (s == null) return null;
+    final value = prefs.getString(_profileKey);
+
+    if (value == null) return null;
+
     try {
-      return UserProfile.decode(s);
+      return UserProfile.decode(value);
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> saveProfile(UserProfile p) async {
+  static Future<void> saveProfile(UserProfile profile) async {
     final prefs = await _prefs();
-    await prefs.setString(_profileKey, p.encode());
-    await prefs.setInt(_goalKey(DateTime.now()), p.dailyGoalMl);
+
+    await prefs.setString(_profileKey, profile.encode());
+    await prefs.setInt(_goalKey(DateTime.now()), profile.dailyGoalMl);
   }
 
   static Future<int> getTodayIntake() async {
@@ -47,73 +49,150 @@ class StorageService {
   }
 
   static Future<List<IntakeEntry>> getTodayLog() async {
-    final prefs = await _prefs();
-    final raw =
-        prefs.getStringList(_logKey(DateTime.now())) ?? const <String>[];
-    return raw.map(IntakeEntry.tryDecode).whereType<IntakeEntry>().toList();
+    return getLogForDay(DateTime.now());
   }
 
   static Future<int> addIntake(int ml) async {
+    if (ml <= 0 || ml > 5000) {
+      throw ArgumentError('Quantité invalide');
+    }
+
     final prefs = await _prefs();
     final now = DateTime.now();
+
     final total = (prefs.getInt(_intakeKey(now)) ?? 0) + ml;
+
     await prefs.setInt(_intakeKey(now), total);
 
     final log = List<String>.from(
       prefs.getStringList(_logKey(now)) ?? const <String>[],
     );
+
     log.add(IntakeEntry(now.hour * 60 + now.minute, ml).encode());
+
     await prefs.setStringList(_logKey(now), log);
 
-    final profileStr = prefs.getString(_profileKey);
-    if (profileStr != null) {
+    final profileString = prefs.getString(_profileKey);
+
+    if (profileString != null) {
       try {
-        await prefs.setInt(
-          _goalKey(now),
-          UserProfile.decode(profileStr).dailyGoalMl,
-        );
+        final profile = UserProfile.decode(profileString);
+
+        await prefs.setInt(_goalKey(now), profile.dailyGoalMl);
       } catch (_) {}
     }
+
     return total;
   }
 
-  /// Annule le dernier ajout du jour. Retourne le nouveau total.
   static Future<int> undoLast() async {
     final prefs = await _prefs();
     final now = DateTime.now();
+
     final log = List<String>.from(
       prefs.getStringList(_logKey(now)) ?? const <String>[],
     );
+
     var total = prefs.getInt(_intakeKey(now)) ?? 0;
+
     if (log.isNotEmpty) {
       final last = IntakeEntry.tryDecode(log.removeLast());
-      if (last != null) total -= last.ml;
+
+      if (last != null) {
+        total -= last.ml;
+      }
+
       if (total < 0) total = 0;
+
       await prefs.setStringList(_logKey(now), log);
       await prefs.setInt(_intakeKey(now), total);
     }
+
     return total;
   }
 
-  /// Historique des [days] derniers jours (du plus ancien à aujourd'hui).
   static Future<List<DayStat>> getHistory(
     int days, {
     required int fallbackGoal,
   }) async {
     final prefs = await _prefs();
     final today = DateTime.now();
-    final out = <DayStat>[];
+
+    final result = <DayStat>[];
+
     for (var i = days - 1; i >= 0; i--) {
-      final d = DateTime(today.year, today.month, today.day - i);
-      out.add(
+      final date = DateTime(today.year, today.month, today.day - i);
+
+      result.add(
         DayStat(
-          date: d,
-          ml: prefs.getInt(_intakeKey(d)) ?? 0,
-          goal: prefs.getInt(_goalKey(d)) ?? fallbackGoal,
+          date: date,
+          ml: prefs.getInt(_intakeKey(date)) ?? 0,
+          goal: prefs.getInt(_goalKey(date)) ?? fallbackGoal,
         ),
       );
     }
-    return out;
+
+    return result;
+  }
+
+  static Future<int> getIntakeForDay(DateTime date) async {
+    final prefs = await _prefs();
+    return prefs.getInt(_intakeKey(date)) ?? 0;
+  }
+
+  static Future<List<IntakeEntry>> getLogForDay(DateTime date) async {
+    final prefs = await _prefs();
+
+    final raw = prefs.getStringList(_logKey(date)) ?? const <String>[];
+
+    return raw.map(IntakeEntry.tryDecode).whereType<IntakeEntry>().toList();
+  }
+
+  static Future<void> _saveDayLog(DateTime date, List<IntakeEntry> log) async {
+    final prefs = await _prefs();
+
+    await prefs.setStringList(
+      _logKey(date),
+      log.map((entry) => entry.encode()).toList(),
+    );
+
+    final total = log.fold<int>(0, (sum, entry) => sum + entry.ml);
+
+    await prefs.setInt(_intakeKey(date), total);
+  }
+
+  static Future<int> updateTodayEntry(int index, int ml) async {
+    if (ml <= 0 || ml > 5000) {
+      throw ArgumentError('Quantité invalide');
+    }
+
+    final now = DateTime.now();
+    final log = await getLogForDay(now);
+
+    if (index < 0 || index >= log.length) {
+      throw RangeError.index(index, log);
+    }
+
+    log[index] = IntakeEntry(log[index].minutes, ml);
+
+    await _saveDayLog(now, log);
+
+    return log.fold<int>(0, (sum, entry) => sum + entry.ml);
+  }
+
+  static Future<int> deleteTodayEntry(int index) async {
+    final now = DateTime.now();
+    final log = await getLogForDay(now);
+
+    if (index < 0 || index >= log.length) {
+      throw RangeError.index(index, log);
+    }
+
+    log.removeAt(index);
+
+    await _saveDayLog(now, log);
+
+    return log.fold<int>(0, (sum, entry) => sum + entry.ml);
   }
 
   static Future<String?> getPlanDay() async {

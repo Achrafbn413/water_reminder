@@ -8,6 +8,7 @@ import '../widgets/app_background.dart';
 import '../widgets/water_wave.dart';
 import 'onboarding_screen.dart';
 import 'stats_screen.dart';
+import 'calendar_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserProfile profile;
@@ -30,10 +31,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addObserver(this);
     NotificationService.refresh.addListener(_load);
-
     _load();
   }
 
@@ -41,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     NotificationService.refresh.removeListener(_load);
-
     super.dispose();
   }
 
@@ -96,6 +94,122 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() => _busy = false);
       }
     }
+  }
+
+  Future<void> _showCustomIntakeDialog({int? initial, int? editIndex}) async {
+    final controller = TextEditingController(text: initial?.toString() ?? '');
+
+    String? errorMessage;
+
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              title: Text(
+                editIndex == null
+                    ? 'Ajouter une quantité'
+                    : 'Modifier la consommation',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Quantité',
+                  suffixText: 'ml',
+                  hintText: 'Exemple : 300',
+                  errorText: errorMessage,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onChanged: (_) {
+                  if (errorMessage != null) {
+                    setDialogState(() => errorMessage = null);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final value = int.tryParse(controller.text.trim());
+
+                    if (value == null || value < 1 || value > 5000) {
+                      setDialogState(() {
+                        errorMessage = 'Entrez une quantité entre 1 et 5000 ml';
+                      });
+                      return;
+                    }
+
+                    Navigator.pop(dialogContext, value);
+                  },
+                  child: Text(editIndex == null ? 'Ajouter' : 'Enregistrer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (amount == null || !mounted) return;
+
+    setState(() => _busy = true);
+
+    try {
+      if (editIndex == null) {
+        await StorageService.addIntake(amount);
+      } else {
+        await StorageService.updateTodayEntry(editIndex, amount);
+      }
+
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _deleteEntry(int index) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Supprimer cette prise ?'),
+          content: const Text(
+            'Cette action modifiera le total de votre journée.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Supprimer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true || !mounted) return;
+
+    await StorageService.deleteTodayEntry(index);
+    await _load();
   }
 
   Future<void> _undo() async {
@@ -227,9 +341,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildHistory() {
-    final entries = _log.reversed.take(4).toList();
+    final start = _log.length > 4 ? _log.length - 4 : 0;
 
-    if (entries.isEmpty) {
+    final indexedEntries = List.generate(
+      _log.length - start,
+      (i) => MapEntry(start + i, _log[start + i]),
+    ).reversed.toList();
+
+    if (_log.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -266,7 +385,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
       child: Column(
-        children: entries.map((entry) {
+        children: indexedEntries.map((item) {
+          final entry = item.value;
+
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 9),
             child: Row(
@@ -302,10 +423,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF38B889),
-                  size: 20,
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.blueGrey),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _showCustomIntakeDialog(
+                        initial: entry.ml,
+                        editIndex: item.key,
+                      );
+                    }
+
+                    if (value == 'delete') {
+                      _deleteEntry(item.key);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                    PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                  ],
                 ),
               ],
             ),
@@ -318,6 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final goal = widget.profile.dailyGoalMl;
+
     final progress = goal <= 0 ? 0.0 : (_intake / goal).clamp(0.0, 1.0);
 
     final remaining = (goal - _intake).clamp(0, goal);
@@ -326,12 +462,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-
           title: const Row(
             children: [
               Icon(Icons.water_drop_rounded, color: blue, size: 25),
@@ -346,8 +480,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-
           actions: [
+            IconButton(
+              tooltip: 'Calendrier',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CalendarScreen(profile: widget.profile),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.calendar_month_rounded, color: darkBlue),
+            ),
             IconButton(
               tooltip: 'Statistiques',
               onPressed: () {
@@ -375,7 +520,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(width: 5),
           ],
         ),
-
         body: _loading
             ? const Center(child: CircularProgressIndicator(color: blue))
             : RefreshIndicator(
@@ -384,7 +528,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
                   children: [
-                    // GREETING
                     Text(
                       _greeting,
                       style: const TextStyle(
@@ -393,9 +536,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     const SizedBox(height: 5),
-
                     Text(
                       _date,
                       style: TextStyle(
@@ -403,10 +544,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         fontSize: 13,
                       ),
                     ),
-
                     const SizedBox(height: 25),
 
-                    // DAILY PROGRESS CARD
+                    // PROGRESSION QUOTIDIENNE
                     Container(
                       padding: const EdgeInsets.symmetric(
                         vertical: 25,
@@ -438,9 +578,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-
                           const SizedBox(height: 20),
-
                           SizedBox(
                             width: 230,
                             height: 230,
@@ -461,9 +599,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ),
                                   ),
                                 ),
-
                                 WaterWave(progress: progress, size: 195),
-
                                 Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -501,37 +637,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 20),
-
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 17,
-                              vertical: 11,
+                              horizontal: 18,
+                              vertical: 12,
                             ),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.13),
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
                                   done
-                                      ? Icons.emoji_events_rounded
+                                      ? Icons.check_circle_rounded
                                       : Icons.flag_rounded,
-                                  color: const Color(0xFFFFD66B),
-                                  size: 19,
+                                  color: const Color(0xFF8CEAFF),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  done
-                                      ? 'Objectif atteint ! Bravo 🎉'
-                                      : 'Encore $remaining ml pour votre objectif',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                const SizedBox(width: 9),
+                                Flexible(
+                                  child: Text(
+                                    done
+                                        ? 'Objectif quotidien atteint !'
+                                        : 'Encore $remaining ml pour atteindre votre objectif',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -543,14 +679,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                     const SizedBox(height: 27),
 
-                    // QUICK ADD
+                    // AJOUT RAPIDE
                     _sectionTitle(
                       'Ajouter de l’eau',
-                      'Enregistrez rapidement votre consommation',
+                      'Enregistrez votre consommation',
                     ),
-
-                    const SizedBox(height: 15),
-
+                    const SizedBox(height: 14),
                     Row(
                       children: [
                         _quickAddButton(150, Icons.local_drink_outlined),
@@ -560,104 +694,112 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _quickAddButton(500, Icons.sports_bar_outlined),
                       ],
                     ),
-
-                    const SizedBox(height: 10),
-
-                    if (_log.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: _busy ? null : _undo,
-                          icon: const Icon(Icons.undo_rounded, size: 17),
-                          label: const Text('Annuler le dernier ajout'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.blueGrey,
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _showCustomIntakeDialog(),
+                        icon: const Icon(Icons.add_circle_outline_rounded),
+                        label: const Text(
+                          'Ajouter une quantité personnalisée',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: blue,
+                          side: BorderSide(color: blue.withValues(alpha: 0.35)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _busy || _log.isEmpty ? null : _undo,
+                        icon: const Icon(Icons.undo_rounded, size: 17),
+                        label: const Text('Annuler le dernier ajout'),
+                      ),
+                    ),
 
-                    const SizedBox(height: 17),
+                    const SizedBox(height: 18),
 
-                    // DAILY HISTORY
+                    // HISTORIQUE DU JOUR
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         _sectionTitle(
-                          'Aujourd’hui',
+                          'Historique du jour',
                           'Vos dernières consommations',
                         ),
                         Text(
                           '${_log.length} prises',
                           style: const TextStyle(
                             color: blue,
-                            fontSize: 12,
                             fontWeight: FontWeight.bold,
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 14),
-
                     _buildHistory(),
 
                     const SizedBox(height: 22),
 
-                    // STATISTICS BUTTON
-                    SizedBox(
-                      height: 55,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  StatsScreen(profile: widget.profile),
+                    // ACCÈS AUX AUTRES ÉCRANS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      CalendarScreen(profile: widget.profile),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.calendar_month_rounded),
+                            label: const Text('Calendrier'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: darkBlue,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(
+                                color: blue.withValues(alpha: 0.25),
+                              ),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.insights_rounded),
-                        label: const Text(
-                          'Voir mes statistiques',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: darkBlue,
-                          side: BorderSide(color: blue.withValues(alpha: 0.25)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(17),
                           ),
                         ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: NotificationService.showTest,
-                        icon: const Icon(
-                          Icons.notifications_active_outlined,
-                          size: 18,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      StatsScreen(profile: widget.profile),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.bar_chart_rounded),
+                            label: const Text('Statistiques'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: darkBlue,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(
+                                color: blue.withValues(alpha: 0.25),
+                              ),
+                            ),
+                          ),
                         ),
-                        label: const Text('Tester les notifications'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.blueGrey,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    const Center(
-                      child: Text(
-                        'Chaque gorgée compte 💧',
-                        style: TextStyle(
-                          color: Colors.blueGrey,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
