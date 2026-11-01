@@ -6,6 +6,7 @@ import '../models/user_profile.dart';
 class StorageService {
   static const _profileKey = 'profile';
   static const _planDayKey = 'plan_day';
+  static const _notificationsEnabledKey = 'notifications_enabled';
 
   static String dayKey(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -21,6 +22,16 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     return prefs;
+  }
+
+  static Future<bool> areNotificationsEnabled() async {
+    final prefs = await _prefs();
+    return prefs.getBool(_notificationsEnabledKey) ?? true;
+  }
+
+  static Future<void> setNotificationsEnabled(bool enabled) async {
+    final prefs = await _prefs();
+    await prefs.setBool(_notificationsEnabledKey, enabled);
   }
 
   static Future<UserProfile?> loadProfile() async {
@@ -48,7 +59,7 @@ class StorageService {
     return prefs.getInt(_intakeKey(DateTime.now())) ?? 0;
   }
 
-  static Future<List<IntakeEntry>> getTodayLog() async {
+  static Future<List<IntakeEntry>> getTodayLog() {
     return getLogForDay(DateTime.now());
   }
 
@@ -77,7 +88,6 @@ class StorageService {
     if (profileString != null) {
       try {
         final profile = UserProfile.decode(profileString);
-
         await prefs.setInt(_goalKey(now), profile.dailyGoalMl);
       } catch (_) {}
     }
@@ -142,7 +152,6 @@ class StorageService {
 
   static Future<List<IntakeEntry>> getLogForDay(DateTime date) async {
     final prefs = await _prefs();
-
     final raw = prefs.getStringList(_logKey(date)) ?? const <String>[];
 
     return raw.map(IntakeEntry.tryDecode).whereType<IntakeEntry>().toList();

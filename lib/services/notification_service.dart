@@ -14,10 +14,9 @@ const String _channelId = 'water_reminders';
 const String _iosCategory = 'WATER_CATEGORY';
 const int glassMl = 250;
 const int snoozeMinutes = 15;
-const int _repeatBaseId = 100; // rappels quotidiens (à partir de demain)
-const int _oneOffBaseId = 200; // rappels intelligents d'aujourd'hui
+const int _repeatBaseId = 100;
+const int _oneOffBaseId = 200;
 
-/// Appelée quand l'utilisateur appuie sur un bouton alors que l'app est fermée.
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) async {
   await NotificationService.handleResponse(response);
@@ -27,10 +26,8 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  /// Permet à l'écran d'accueil de se rafraîchir après une action.
   static final ValueNotifier<int> refresh = ValueNotifier<int>(0);
 
-  // Ces drapeaux sont propres à chaque "isolate" (app ou arrière-plan).
   static bool _tzReady = false;
   static bool _pluginReady = false;
 
@@ -54,52 +51,109 @@ class NotificationService {
 
   static Future<void> _ensureTimezone() async {
     if (_tzReady) return;
+
     tz_data.initializeTimeZones();
+
     try {
       final name = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(name));
     } catch (_) {
       tz.setLocalLocation(tz.getLocation('Africa/Casablanca'));
     }
+
     _tzReady = true;
   }
 
-  /// Utilisé dans l'isolate d'arrière-plan (sans les callbacks).
   static Future<void> _ensurePlugin() async {
     if (_pluginReady) return;
+
     await _plugin.initialize(_initSettings);
     _pluginReady = true;
   }
 
   static Future<void> init() async {
     if (kIsWeb) return;
+
     await _ensureTimezone();
+
     await _plugin.initialize(
       _initSettings,
       onDidReceiveNotificationResponse: handleResponse,
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
+
     _pluginReady = true;
   }
 
+  // --------------------------------------------------
+  // ACTIVATION / DESACTIVATION
+  // --------------------------------------------------
+
+  static Future<bool> isEnabled() async {
+    return StorageService.areNotificationsEnabled();
+  }
+
+  static Future<void> setEnabled(bool enabled) async {
+    if (kIsWeb) return;
+
+    await StorageService.setNotificationsEnabled(enabled);
+
+    if (!enabled) {
+      await _ensurePlugin();
+      await _plugin.cancelAll();
+      refresh.value++;
+      return;
+    }
+
+    await requestPermissions();
+    await rescheduleSmart();
+    refresh.value++;
+  }
+
+  static Future<void> cancelAll() async {
+    if (kIsWeb) return;
+
+    await _ensurePlugin();
+    await _plugin.cancelAll();
+
+    refresh.value++;
+  }
+
+  // --------------------------------------------------
+  // ACTIONS DES NOTIFICATIONS
+  // --------------------------------------------------
+
   static Future<void> handleResponse(NotificationResponse response) async {
+    if (!await isEnabled()) return;
+
     if (response.actionId == actionDrank) {
       await StorageService.addIntake(glassMl);
+
       final profile = await StorageService.loadProfile();
+
       await rescheduleSmart(firstInMinutes: profile?.intervalMinutes ?? 120);
     } else if (response.actionId == actionSkip) {
       await rescheduleSmart(firstInMinutes: snoozeMinutes);
     }
+
     refresh.value++;
   }
 
+  // --------------------------------------------------
+  // AUTORISATIONS
+  // --------------------------------------------------
+
   static Future<void> requestPermissions() async {
     if (kIsWeb) return;
+
+    await _ensurePlugin();
+
     await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
+
     await _plugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
@@ -107,12 +161,16 @@ class NotificationService {
         ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
+  // --------------------------------------------------
+  // CONFIGURATION VISUELLE DES NOTIFICATIONS
+  // --------------------------------------------------
+
   static NotificationDetails _details() {
     return NotificationDetails(
       android: AndroidNotificationDetails(
         _channelId,
         "Rappels d'eau",
-        channelDescription: "Rappels pour boire de l'eau",
+        channelDescription: "Rappels pour vous aider à boire régulièrement",
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.reminder,
@@ -140,65 +198,91 @@ class NotificationService {
     if (ml >= 1000) {
       return '${(ml / 1000).toStringAsFixed(2).replaceAll('.', ',')} L';
     }
+
     return '$ml ml';
   }
 
-  /// Replanifie les rappels selon ce qu'il reste à boire aujourd'hui.
-  /// [firstInMinutes] : délai avant le prochain rappel (après un ajout ou
-  /// "Pas encore"). Sinon, on suit la grille réveil + n x intervalle.
+  // --------------------------------------------------
+  // RAPPELS INTELLIGENTS
+  // --------------------------------------------------
+
   static Future<void> rescheduleSmart({int? firstInMinutes}) async {
     if (kIsWeb) return;
+
     try {
-      final profile = await StorageService.loadProfile();
-      if (profile == null) return;
       await _ensureTimezone();
       await _ensurePlugin();
+
+      // Si les notifications sont désactivées,
+      // aucun rappel ne doit rester programmé.
+      if (!await isEnabled()) {
+        await _plugin.cancelAll();
+        return;
+      }
+
+      final profile = await StorageService.loadProfile();
+
+      if (profile == null) return;
 
       final intake = await StorageService.getTodayIntake();
       final remaining = profile.dailyGoalMl - intake;
 
       final now = tz.TZDateTime.now(tz.local);
+
       final todayMidnight = tz.TZDateTime(
         tz.local,
         now.year,
         now.month,
         now.day,
       );
+
       var base = todayMidnight;
       var nowMin = now.hour * 60 + now.minute;
+
       final wake = profile.wakeMinutes;
       var end = profile.sleepMinutes;
-      if (end <= wake) end += 1440; // coucher après minuit
+
+      if (end <= wake) {
+        end += 1440;
+      }
+
       if (end > 1440 && nowMin < end - 1440) {
-        // On est encore dans la nuit de la journée précédente.
         base = base.subtract(const Duration(days: 1));
         nowMin += 1440;
       }
 
       await _plugin.cancelAll();
 
-      // 1) Rappels d'aujourd'hui, adaptés à ce qu'il reste à boire.
+      // Rappels du jour.
       final times = <int>[];
+
       if (remaining > 0) {
         final needed = (remaining / glassMl).ceil();
+
         var interval = profile.intervalMinutes;
         int first;
+
         if (firstInMinutes != null) {
           first = nowMin + firstInMinutes;
         } else {
           first = wake;
+
           while (first <= nowMin + 2) {
             first += interval;
           }
         }
-        if (first < wake) first = wake;
+
+        if (first < wake) {
+          first = wake;
+        }
 
         final window = end - first;
+
         if (window >= 0) {
-          // En retard : on resserre les rappels (minimum 30 min).
           if (window ~/ interval + 1 < needed) {
             interval = max(30, window ~/ needed);
           }
+
           for (
             var m = first;
             m <= end && times.length < needed + 2 && times.length < 24;
@@ -210,13 +294,19 @@ class NotificationService {
       }
 
       var id = _oneOffBaseId;
+
       for (final t in times) {
         final at = base.add(Duration(minutes: t));
-        if (!at.isAfter(now.add(const Duration(seconds: 30)))) continue;
+
+        if (!at.isAfter(now.add(const Duration(seconds: 30)))) {
+          continue;
+        }
+
         await _plugin.zonedSchedule(
           id++,
           'Il est temps de boire 💧',
-          "Il vous reste ${_fmt(remaining)} aujourd'hui. Répondez directement ici.",
+          "Il vous reste ${_fmt(remaining)} aujourd'hui. "
+              'Prenez un moment pour vous hydrater.',
           at,
           _details(),
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -224,9 +314,11 @@ class NotificationService {
         );
       }
 
-      // 2) Jours suivants : rappels quotidiens répétés à partir de demain.
+      // Rappels quotidiens à partir de demain.
       final tomorrow = todayMidnight.add(const Duration(days: 1));
+
       var rid = _repeatBaseId;
+
       for (
         var m = wake;
         m <= end && rid < _repeatBaseId + 24;
@@ -235,7 +327,7 @@ class NotificationService {
         await _plugin.zonedSchedule(
           rid++,
           'Il est temps de boire 💧',
-          "Un verre d'eau maintenant ? Répondez directement ici.",
+          "Un verre d'eau maintenant ? 💧",
           tomorrow.add(Duration(minutes: m)),
           _details(),
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -250,22 +342,44 @@ class NotificationService {
     }
   }
 
-  /// Replanifie une seule fois par jour (au premier lancement de la journée).
+  // --------------------------------------------------
+  // PLANIFICATION QUOTIDIENNE
+  // --------------------------------------------------
+
   static Future<void> ensureDailyPlan() async {
     if (kIsWeb) return;
+
+    if (!await isEnabled()) {
+      await cancelAll();
+      return;
+    }
+
     final last = await StorageService.getPlanDay();
+
     if (last != StorageService.dayKey(DateTime.now())) {
       await rescheduleSmart();
     }
   }
 
-  /// Notification immédiate pour tester les boutons.
+  // --------------------------------------------------
+  // NOTIFICATION DE TEST
+  // --------------------------------------------------
+
   static Future<void> showTest() async {
     if (kIsWeb) return;
+
+    await _ensurePlugin();
+
+    if (!await isEnabled()) {
+      throw Exception('Activez les notifications avant de lancer le test.');
+    }
+
+    await requestPermissions();
+
     await _plugin.show(
       1,
       "Test : boire de l'eau 💧",
-      "Appuyez sur « J'ai bu » pour tester.",
+      "Votre application Water Reminder fonctionne correctement !",
       _details(),
       payload: 'test',
     );

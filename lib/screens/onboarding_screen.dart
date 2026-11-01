@@ -5,6 +5,7 @@ import '../services/notification_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/app_background.dart';
 import 'home_screen.dart';
+import 'notifications_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final UserProfile? initial;
@@ -78,7 +79,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final profile = _profile;
 
       await StorageService.saveProfile(profile);
-      await NotificationService.requestPermissions();
       await NotificationService.rescheduleSmart();
 
       if (!mounted) return;
@@ -95,6 +95,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       setState(() => _saving = false);
     }
+  }
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
   }
 
   Widget _sectionTitle(String title, String subtitle, IconData icon) {
@@ -257,6 +264,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Widget _notificationSettingsCard() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            'Notifications',
+            'Configurez vos rappels d’hydratation',
+            Icons.notifications_active_outlined,
+          ),
+          const Text(
+            'Choisissez si vous souhaitez recevoir des rappels et tester leur fonctionnement.',
+            style: TextStyle(color: Colors.blueGrey, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openNotifications,
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Gérer mes notifications'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: blue,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: blue.withValues(alpha: 0.35)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final goal = _profile.dailyGoalMl;
@@ -278,7 +321,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
           children: [
             const SizedBox(height: 8),
-
             const Text(
               'Apprenons à vous connaître.',
               style: TextStyle(
@@ -288,9 +330,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 1.2,
               ),
             ),
-
             const SizedBox(height: 10),
-
             Text(
               'Personnalisons votre programme d’hydratation selon votre mode de vie.',
               style: TextStyle(
@@ -299,10 +339,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 1.5,
               ),
             ),
-
             const SizedBox(height: 28),
 
-            // WEIGHT
+            // POIDS
             _card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,7 +351,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     'Utilisé pour estimer votre besoin quotidien',
                     Icons.monitor_weight_outlined,
                   ),
-
                   Center(
                     child: RichText(
                       text: TextSpan(
@@ -337,7 +375,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                   ),
-
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       activeTrackColor: blue,
@@ -356,7 +393,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       },
                     ),
                   ),
-
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -370,7 +406,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             const SizedBox(height: 18),
 
-            // ACTIVITY
+            // ACTIVITE
             _card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,7 +416,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     'Quel est votre niveau d’activité physique ?',
                     Icons.directions_run_rounded,
                   ),
-
                   Row(
                     children: [
                       _activityCard(
@@ -411,7 +446,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             const SizedBox(height: 18),
 
-            // SCHEDULE
+            // HORAIRES
             _card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,7 +456,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     'Définissez vos horaires habituels',
                     Icons.access_time_rounded,
                   ),
-
                   Row(
                     children: [
                       _timeCard(
@@ -445,7 +479,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             const SizedBox(height: 18),
 
-            // REMINDERS
+            // FREQUENCE DES RAPPELS
             _card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +489,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     'À quelle fréquence souhaitez-vous boire ?',
                     Icons.notifications_active_outlined,
                   ),
-
                   Wrap(
                     spacing: 9,
                     runSpacing: 9,
@@ -490,9 +523,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
+            const SizedBox(height: 18),
+
+            // ACCES AUX NOTIFICATIONS
+            _notificationSettingsCard(),
+
             const SizedBox(height: 20),
 
-            // DAILY GOAL
+            // OBJECTIF QUOTIDIEN
             Container(
               padding: const EdgeInsets.all(23),
               decoration: BoxDecoration(
@@ -539,6 +577,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             const SizedBox(height: 24),
 
+            // ENREGISTRER
             SizedBox(
               height: 58,
               child: FilledButton(

@@ -11,6 +11,7 @@ import 'stats_screen.dart';
 import 'calendar_screen.dart';
 import 'achievements_screen.dart';
 import 'plant_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserProfile profile;
@@ -236,6 +237,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+  }
+
   String get _greeting {
     final hour = DateTime.now().hour;
 
@@ -452,6 +460,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildNotificationsCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xFFE3F2FD),
+          child: Icon(Icons.notifications_active_rounded, color: blue),
+        ),
+        title: const Text(
+          'Mes notifications',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: const Text('Gérer les rappels et tester les notifications'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 17),
+        onTap: _openNotifications,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final goal = widget.profile.dailyGoalMl;
@@ -483,6 +512,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
           actions: [
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: _openNotifications,
+              icon: const Icon(Icons.notifications_outlined, color: darkBlue),
+            ),
             IconButton(
               tooltip: 'Calendrier',
               onPressed: () {
@@ -805,6 +839,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
 
                     const SizedBox(height: 16),
+
+                    // NOTIFICATIONS
+                    _buildNotificationsCard(),
+
+                    const SizedBox(height: 10),
 
                     // MES RECOMPENSES
                     Card(
