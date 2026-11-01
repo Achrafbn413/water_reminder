@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'models/user_profile.dart';
-import 'screens/home_screen.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/notification_service.dart';
 import 'services/storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await NotificationService.init();
+
   final profile = await StorageService.loadProfile();
+
   runApp(WaterReminderApp(profile: profile));
 }
 
@@ -23,6 +25,7 @@ ThemeData _theme(Brightness brightness) => ThemeData(
 
 class WaterReminderApp extends StatelessWidget {
   final UserProfile? profile;
+
   const WaterReminderApp({super.key, this.profile});
 
   @override
@@ -33,9 +36,7 @@ class WaterReminderApp extends StatelessWidget {
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: profile == null
-          ? const OnboardingScreen()
-          : HomeScreen(profile: profile!),
+      home: WelcomeScreen(profile: profile),
     );
   }
 }
