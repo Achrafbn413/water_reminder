@@ -13,6 +13,7 @@ import 'calendar_screen.dart';
 import 'achievements_screen.dart';
 import 'plant_screen.dart';
 import 'notifications_screen.dart';
+import 'medications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserProfile profile;
@@ -26,6 +27,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const Color blue = Color(0xFF168FE5);
   static const Color darkBlue = Color(0xFF123B62);
+  static const Color cyan = Color(0xFF8CEAFF);
+
+  late UserProfile _profile;
 
   int _intake = 0;
   List<IntakeEntry> _log = [];
@@ -35,18 +39,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _darkMode = false;
 
   Color get _background =>
-      _darkMode ? const Color(0xFF0B1420) : const Color(0xFFF3F8FC);
+      _darkMode ? const Color(0xFF0B1420) : const Color(0xFFF2F7FC);
 
-  Color get _surface => _darkMode ? const Color(0xFF172638) : Colors.white;
+  Color get _surface => _darkMode ? const Color(0xFF162436) : Colors.white;
 
   Color get _text => _darkMode ? const Color(0xFFF1F6FC) : darkBlue;
 
   Color get _muted =>
       _darkMode ? const Color(0xFFA6B7C9) : Colors.blueGrey.shade500;
 
+  Color get _border => _darkMode
+      ? Colors.white.withValues(alpha: 0.06)
+      : const Color(0xFFE6EEF6);
+
+  BoxDecoration _cardDecoration({double radius = 22}) {
+    return BoxDecoration(
+      color: _surface,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: _border),
+      boxShadow: [
+        BoxShadow(
+          color: (_darkMode ? Colors.black : blue).withValues(
+            alpha: _darkMode ? 0.25 : 0.07,
+          ),
+          blurRadius: 18,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+
+    _profile = widget.profile;
 
     WidgetsBinding.instance.addObserver(this);
     NotificationService.refresh.addListener(_load);
@@ -104,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() => _loading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +164,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           duration: const Duration(seconds: 1),
           behavior: SnackBarBehavior.floating,
           backgroundColor: blue,
+          margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       );
     } finally {
@@ -157,27 +189,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: _surface,
+              surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(28),
               ),
-              title: Text(
-                editIndex == null
-                    ? 'Ajouter une quantité'
-                    : 'Modifier la consommation',
-                style: TextStyle(color: _text, fontWeight: FontWeight.bold),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Icon(
+                      Icons.water_drop_rounded,
+                      color: blue,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      editIndex == null
+                          ? 'Ajouter une quantité'
+                          : 'Modifier la consommation',
+                      style: TextStyle(
+                        color: _text,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               content: TextField(
                 controller: controller,
                 autofocus: true,
                 keyboardType: TextInputType.number,
-                style: TextStyle(color: _text),
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Quantité',
                   suffixText: 'ml',
                   hintText: 'Exemple : 300',
                   errorText: errorMessage,
+                  filled: true,
+                  fillColor: blue.withValues(alpha: _darkMode ? 0.10 : 0.05),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: blue, width: 1.6),
                   ),
                 ),
                 onChanged: (_) {
@@ -186,12 +253,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   }
                 },
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Annuler'),
                 ),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                   onPressed: () {
                     final value = int.tryParse(controller.text.trim());
 
@@ -240,20 +314,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: _surface,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
           title: Text(
             'Supprimer cette prise ?',
-            style: TextStyle(color: _text),
+            style: TextStyle(color: _text, fontWeight: FontWeight.bold),
           ),
           content: Text(
             'Cette action modifiera le total de votre journée.',
             style: TextStyle(color: _muted),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuler'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Supprimer'),
             ),
@@ -297,20 +382,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _openMedications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MedicationsScreen()),
+    );
+  }
+
   void _openCalendar() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => CalendarScreen(profile: widget.profile),
-      ),
+      MaterialPageRoute(builder: (_) => CalendarScreen(profile: _profile)),
     );
   }
 
   void _openStats() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => StatsScreen(profile: widget.profile)),
+      MaterialPageRoute(builder: (_) => StatsScreen(profile: _profile)),
     );
+  }
+
+  Future<void> _openProfile() async {
+    final updatedProfile = await Navigator.push<UserProfile>(
+      context,
+      MaterialPageRoute(builder: (_) => OnboardingScreen(initial: _profile)),
+    );
+
+    if (!mounted || updatedProfile == null) return;
+
+    setState(() {
+      _profile = updatedProfile;
+    });
+
+    await NotificationService.rescheduleSmart();
   }
 
   String get _greeting {
@@ -358,47 +463,91 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return '$hour:$minute';
   }
 
+  // ───────────────────────── WIDGETS ─────────────────────────
+
   Widget _sectionTitle(String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: _text,
-            fontSize: 19,
-            fontWeight: FontWeight.bold,
+        Container(
+          width: 4,
+          height: 36,
+          decoration: BoxDecoration(
+            color: blue,
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(subtitle, style: TextStyle(color: _muted, fontSize: 12)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(subtitle, style: TextStyle(color: _muted, fontSize: 12)),
+            ],
+          ),
+        ),
       ],
     );
   }
 
   Widget _quickAddButton(int ml, IconData icon) {
     return Expanded(
-      child: Material(
-        color: _surface,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: _busy ? null : () => _add(ml),
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              children: [
-                Icon(icon, color: blue, size: 25),
-                const SizedBox(height: 8),
-                Text(
-                  '+$ml ml',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+      child: Container(
+        decoration: _cardDecoration(radius: 20),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            onTap: _busy ? null : () => _add(ml),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          blue.withValues(alpha: 0.22),
+                          cyan.withValues(alpha: 0.22),
+                        ],
+                      ),
+                    ),
+                    child: Icon(icon, color: blue, size: 24),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Text(
+                    '+$ml',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'ml',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -417,20 +566,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_log.isEmpty) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
+        padding: const EdgeInsets.all(22),
+        decoration: _cardDecoration(radius: 22),
+        child: Column(
           children: [
-            const Icon(Icons.water_drop_outlined, color: blue, size: 26),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Aucune consommation enregistrée pour le moment.',
-                style: TextStyle(color: _muted, fontSize: 13),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: blue.withValues(alpha: 0.10),
               ),
+              child: const Icon(
+                Icons.water_drop_outlined,
+                color: blue,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Aucune consommation enregistrée pour le moment.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _muted, fontSize: 13),
             ),
           ],
         ),
@@ -438,77 +595,114 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: _darkMode ? 0.10 : 0.035),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: _cardDecoration(radius: 24),
+      child: Column(
+        children: [
+          for (int i = 0; i < entries.length; i++) ...[
+            _historyRow(entries[i]),
+            if (i != entries.length - 1)
+              Divider(height: 1, thickness: 1, color: _border),
+          ],
         ],
       ),
-      child: Column(
-        children: entries.map((item) {
-          final entry = item.value;
+    );
+  }
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: Row(
+  Widget _historyRow(MapEntry<int, IntakeEntry> item) {
+    final entry = item.value;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  blue.withValues(alpha: 0.20),
+                  cyan.withValues(alpha: 0.20),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(Icons.water_drop_rounded, color: blue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 43,
-                  height: 43,
-                  decoration: BoxDecoration(
-                    color: blue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.water_drop_rounded, color: blue),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${entry.ml} ml',
-                        style: TextStyle(
-                          color: _text,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        _formatTime(entry.minutes),
-                        style: TextStyle(color: _muted, fontSize: 11),
-                      ),
-                    ],
+                Text(
+                  '${entry.ml} ml',
+                  style: TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: _muted),
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _showCustomIntakeDialog(
-                        initial: entry.ml,
-                        editIndex: item.key,
-                      );
-                    }
-
-                    if (value == 'delete') {
-                      _deleteEntry(item.key);
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                    PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 12, color: _muted),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatTime(entry.minutes),
+                      style: TextStyle(color: _muted, fontSize: 11),
+                    ),
                   ],
                 ),
               ],
             ),
-          );
-        }).toList(),
+          ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_horiz_rounded, color: _muted),
+            color: _surface,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            onSelected: (value) {
+              if (value == 'edit') {
+                _showCustomIntakeDialog(initial: entry.ml, editIndex: item.key);
+              }
+
+              if (value == 'delete') {
+                _deleteEntry(item.key);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit_rounded, size: 18, color: blue),
+                    const SizedBox(width: 10),
+                    Text('Modifier', style: TextStyle(color: _text)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 18,
+                      color: Colors.redAccent,
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Supprimer', style: TextStyle(color: _text)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -516,33 +710,104 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _featureCard({
     required IconData icon,
     required Color iconColor,
-    required Color iconBackground,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return Card(
-      color: _surface,
-      elevation: _darkMode ? 0 : 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        leading: CircleAvatar(
-          backgroundColor: iconBackground,
-          child: Icon(icon, color: iconColor),
+    return Container(
+      decoration: _cardDecoration(radius: 20),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: _darkMode ? 0.20 : 0.13),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 25),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: _text,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: TextStyle(color: _muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _muted.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: _muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        title: Text(
-          title,
-          style: TextStyle(color: _text, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _statTile(IconData icon, String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         ),
-        subtitle: Text(subtitle, style: TextStyle(color: _muted, fontSize: 12)),
-        trailing: Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: _muted,
+        child: Column(
+          children: [
+            Icon(icon, color: cyan, size: 18),
+            const SizedBox(height: 5),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+            ),
+          ],
         ),
-        onTap: onTap,
       ),
     );
   }
@@ -554,123 +819,207 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     bool done,
     double availableWidth,
   ) {
-    final circleSize = (availableWidth * 0.66).clamp(175.0, 225.0);
+    final circleSize = (availableWidth * 0.62).clamp(170.0, 220.0).toDouble();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 23),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFF123B62), Color(0xFF168FE5), Color(0xFF20B9E8)],
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: blue.withValues(alpha: 0.20),
-            blurRadius: 24,
-            offset: const Offset(0, 9),
+            color: blue.withValues(alpha: 0.30),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
         children: [
-          const Text(
-            'VOTRE HYDRATATION DU JOUR',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 11,
-              letterSpacing: 1.7,
-              fontWeight: FontWeight.w600,
+          Positioned(
+            top: -45,
+            right: -35,
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: circleSize,
-            height: circleSize,
-            child: Stack(
-              alignment: Alignment.center,
+          Positioned(
+            bottom: -60,
+            left: -40,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+            child: Column(
               children: [
-                SizedBox(
-                  width: circleSize,
-                  height: circleSize,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor: Colors.white24,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF8CEAFF),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: const Text(
+                    'VOTRE HYDRATATION DU JOUR',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                WaterWave(progress: progress, size: circleSize * 0.86),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+                const SizedBox(height: 20),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: progress),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animated, _) {
+                    return Container(
+                      width: circleSize,
+                      height: circleSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: cyan.withValues(alpha: 0.22),
+                            blurRadius: 30,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: circleSize,
+                            height: circleSize,
+                            child: CircularProgressIndicator(
+                              value: animated,
+                              strokeWidth: 9,
+                              strokeCap: StrokeCap.round,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                cyan,
+                              ),
+                            ),
+                          ),
+                          WaterWave(
+                            progress: animated,
+                            size: circleSize * 0.86,
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.water_drop_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${(progress * 100).round()}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1,
+                                ),
+                              ),
+                              Text(
+                                '$_intake ml',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                'sur $goal ml',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Row(
                   children: [
-                    const Icon(
-                      Icons.water_drop_rounded,
-                      color: Colors.white,
-                      size: 25,
+                    _statTile(Icons.water_drop_rounded, 'Bu', '$_intake ml'),
+                    const SizedBox(width: 8),
+                    _statTile(
+                      Icons.hourglass_bottom_rounded,
+                      'Restant',
+                      '$remaining ml',
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${(progress * 100).round()}%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '$_intake ml',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'sur $goal ml',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
+                    const SizedBox(width: 8),
+                    _statTile(
+                      Icons.local_drink_rounded,
+                      'Prises',
+                      '${_log.length}',
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  done ? Icons.check_circle_rounded : Icons.flag_rounded,
-                  color: const Color(0xFF8CEAFF),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    done
-                        ? 'Objectif quotidien atteint !'
-                        : 'Encore $remaining ml pour atteindre votre objectif',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: done ? 0.22 : 0.14),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        done ? Icons.check_circle_rounded : Icons.flag_rounded,
+                        color: cyan,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          done
+                              ? 'Objectif quotidien atteint !'
+                              : 'Encore $remaining ml pour atteindre votre objectif',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -681,14 +1030,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _profileButton() {
+    final name = _profile.fullName;
+
+    return InkWell(
+      onTap: _openProfile,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: blue.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(
+              color: blue.withValues(alpha: _darkMode ? 0.10 : 0.10),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircleAvatar(
+              radius: 16,
+              backgroundColor: blue,
+              child: Icon(Icons.person_rounded, color: Colors.white, size: 19),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              name.isEmpty ? 'Mon profil' : name.split(' ').first,
+              style: TextStyle(
+                color: _text,
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shortcutButton({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: _cardDecoration(radius: 20),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: blue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: blue, size: 19),
+                ),
+                const SizedBox(width: 9),
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final goal = widget.profile.dailyGoalMl;
+    final goal = _profile.dailyGoalMl;
+
     final progress = goal <= 0
         ? 0.0
         : (_intake / goal).clamp(0.0, 1.0).toDouble();
 
-    final remaining = (goal - _intake).clamp(0, goal);
+    final remaining = (goal - _intake).clamp(0, goal).toInt();
     final done = _intake >= goal;
 
     return Theme(
@@ -707,10 +1147,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        cardTheme: CardThemeData(
-          color: _surface,
-          surfaceTintColor: Colors.transparent,
-        ),
       ),
       child: Scaffold(
         backgroundColor: _background,
@@ -718,15 +1154,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           titleSpacing: 18,
           title: Row(
             children: [
-              const Icon(Icons.water_drop_rounded, color: blue, size: 25),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [blue, Color(0xFF20B9E8)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.water_drop_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
               Flexible(
                 child: Text(
                   'Water Reminder',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: _text,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     fontSize: 18,
                   ),
                 ),
@@ -741,33 +1192,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, color: _text),
+              color: _surface,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               onSelected: (value) {
                 if (value == 'calendar') _openCalendar();
                 if (value == 'stats') _openStats();
-
-                if (value == 'profile') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OnboardingScreen(initial: widget.profile),
-                    ),
-                  );
-                }
-
                 if (value == 'theme') _toggleTheme();
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'calendar',
-                  child: Text('Calendrier'),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_month_rounded,
+                        size: 19,
+                        color: blue,
+                      ),
+                      const SizedBox(width: 10),
+                      Text('Calendrier', style: TextStyle(color: _text)),
+                    ],
+                  ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'stats',
-                  child: Text('Statistiques'),
-                ),
-                const PopupMenuItem(
-                  value: 'profile',
-                  child: Text('Modifier mon profil'),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.bar_chart_rounded,
+                        size: 19,
+                        color: blue,
+                      ),
+                      const SizedBox(width: 10),
+                      Text('Statistiques', style: TextStyle(color: _text)),
+                    ],
+                  ),
                 ),
                 PopupMenuItem(
                   value: 'theme',
@@ -777,9 +1239,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _darkMode
                             ? Icons.light_mode_rounded
                             : Icons.dark_mode_rounded,
+                        size: 19,
+                        color: blue,
                       ),
                       const SizedBox(width: 10),
-                      Text(_darkMode ? 'Mode clair' : 'Mode sombre'),
+                      Text(
+                        _darkMode ? 'Mode clair' : 'Mode sombre',
+                        style: TextStyle(color: _text),
+                      ),
                     ],
                   ),
                 ),
@@ -797,20 +1264,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   builder: (context, constraints) {
                     return ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 35),
+                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 35),
                       children: [
-                        Text(
-                          _greeting,
-                          style: TextStyle(
-                            color: _text,
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          _date,
-                          style: TextStyle(color: _muted, fontSize: 13),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _greeting,
+                                    style: TextStyle(
+                                      color: _text,
+                                      fontSize: 25,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.event_rounded,
+                                        size: 14,
+                                        color: _muted,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        _date,
+                                        style: TextStyle(
+                                          color: _muted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _profileButton(),
+                          ],
                         ),
                         const SizedBox(height: 22),
 
@@ -833,19 +1326,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Row(
                           children: [
                             _quickAddButton(150, Icons.local_drink_outlined),
-                            const SizedBox(width: 9),
+                            const SizedBox(width: 10),
                             _quickAddButton(250, Icons.water_drop_outlined),
-                            const SizedBox(width: 9),
+                            const SizedBox(width: 10),
                             _quickAddButton(500, Icons.sports_bar_outlined),
                           ],
                         ),
 
-                        const SizedBox(height: 13),
+                        const SizedBox(height: 14),
 
                         SizedBox(
                           width: double.infinity,
-                          height: 52,
-                          child: OutlinedButton.icon(
+                          height: 54,
+                          child: FilledButton.icon(
                             onPressed: _busy
                                 ? null
                                 : () => _showCustomIntakeDialog(),
@@ -855,23 +1348,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: blue,
-                              side: BorderSide(
-                                color: blue.withValues(alpha: 0.45),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: blue.withValues(
+                                alpha: _darkMode ? 0.20 : 0.11,
                               ),
+                              foregroundColor: blue,
+                              elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(18),
+                                side: BorderSide(
+                                  color: blue.withValues(alpha: 0.35),
+                                ),
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 6),
 
                         Align(
                           alignment: Alignment.centerRight,
@@ -882,7 +1379,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
 
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
 
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -893,12 +1390,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 'Vos dernières consommations',
                               ),
                             ),
-                            Text(
-                              '${_log.length} prises',
-                              style: const TextStyle(
-                                color: blue,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 11,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: blue.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${_log.length} prises',
+                                style: const TextStyle(
+                                  color: blue,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -907,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 14),
                         _buildHistory(),
 
-                        const SizedBox(height: 25),
+                        const SizedBox(height: 28),
 
                         _sectionTitle(
                           'Votre espace',
@@ -939,9 +1446,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 12),
 
                         _featureCard(
+                          icon: Icons.medication_outlined,
+                          iconColor: Colors.teal,
+                          title: 'Mes médicaments',
+                          subtitle: 'Gérer les traitements et les rappels',
+                          onTap: _openMedications,
+                        ),
+
+                        const SizedBox(height: 11),
+
+                        _featureCard(
                           icon: Icons.notifications_active_rounded,
                           iconColor: blue,
-                          iconBackground: const Color(0xFFE3F2FD),
                           title: 'Mes notifications',
                           subtitle: 'Gérer les rappels et les alertes',
                           onTap: _openNotifications,
@@ -952,7 +1468,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _featureCard(
                           icon: Icons.emoji_events_rounded,
                           iconColor: Colors.orange,
-                          iconBackground: const Color(0xFFFFF3CD),
                           title: 'Mes récompenses',
                           subtitle: 'XP, niveaux et badges',
                           onTap: () {
@@ -960,7 +1475,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               context,
                               MaterialPageRoute(
                                 builder: (_) =>
-                                    AchievementsScreen(profile: widget.profile),
+                                    AchievementsScreen(profile: _profile),
                               ),
                             );
                           },
@@ -971,7 +1486,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _featureCard(
                           icon: Icons.eco_rounded,
                           iconColor: Colors.green,
-                          iconBackground: const Color(0xFFE8F5E9),
                           title: 'Ma plante virtuelle',
                           subtitle:
                               'Fais grandir ta plante grâce à ton hydratation',
@@ -979,14 +1493,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    PlantScreen(profile: widget.profile),
+                                builder: (_) => PlantScreen(profile: _profile),
                               ),
                             );
                           },
                         ),
 
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 26),
 
                         Center(
                           child: Text(
@@ -1004,38 +1517,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   },
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _shortcutButton({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: _text,
-        backgroundColor: _surface,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        side: BorderSide(color: blue.withValues(alpha: 0.25)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: blue, size: 19),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-            ),
-          ),
-        ],
       ),
     );
   }

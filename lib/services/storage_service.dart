@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/history.dart';
+import '../models/medication.dart';
 import '../models/user_profile.dart';
 
 class StorageService {
@@ -8,31 +11,44 @@ class StorageService {
   static const _planDayKey = 'plan_day';
   static const _notificationsEnabledKey = 'notifications_enabled';
 
+  static const _medicationsKey = 'medications_v1';
+  static const _medicationLogsKey = 'medication_logs_v1';
+
   static String dayKey(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
+
     return '${date.year}-$month-$day';
   }
 
   static String _intakeKey(DateTime date) => 'intake_${dayKey(date)}';
+
   static String _goalKey(DateTime date) => 'goal_${dayKey(date)}';
+
   static String _logKey(DateTime date) => 'log_${dayKey(date)}';
 
   static Future<SharedPreferences> _prefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
+
     return prefs;
   }
 
+  // ---------------- NOTIFICATIONS ----------------
+
   static Future<bool> areNotificationsEnabled() async {
     final prefs = await _prefs();
+
     return prefs.getBool(_notificationsEnabledKey) ?? true;
   }
 
   static Future<void> setNotificationsEnabled(bool enabled) async {
     final prefs = await _prefs();
+
     await prefs.setBool(_notificationsEnabledKey, enabled);
   }
+
+  // ---------------- PROFIL ----------------
 
   static Future<UserProfile?> loadProfile() async {
     final prefs = await _prefs();
@@ -51,11 +67,15 @@ class StorageService {
     final prefs = await _prefs();
 
     await prefs.setString(_profileKey, profile.encode());
+
     await prefs.setInt(_goalKey(DateTime.now()), profile.dailyGoalMl);
   }
 
+  // ---------------- SUIVI DE L'EAU ----------------
+
   static Future<int> getTodayIntake() async {
     final prefs = await _prefs();
+
     return prefs.getInt(_intakeKey(DateTime.now())) ?? 0;
   }
 
@@ -88,6 +108,7 @@ class StorageService {
     if (profileString != null) {
       try {
         final profile = UserProfile.decode(profileString);
+
         await prefs.setInt(_goalKey(now), profile.dailyGoalMl);
       } catch (_) {}
     }
@@ -115,6 +136,7 @@ class StorageService {
       if (total < 0) total = 0;
 
       await prefs.setStringList(_logKey(now), log);
+
       await prefs.setInt(_intakeKey(now), total);
     }
 
@@ -147,11 +169,13 @@ class StorageService {
 
   static Future<int> getIntakeForDay(DateTime date) async {
     final prefs = await _prefs();
+
     return prefs.getInt(_intakeKey(date)) ?? 0;
   }
 
   static Future<List<IntakeEntry>> getLogForDay(DateTime date) async {
     final prefs = await _prefs();
+
     final raw = prefs.getStringList(_logKey(date)) ?? const <String>[];
 
     return raw.map(IntakeEntry.tryDecode).whereType<IntakeEntry>().toList();
@@ -204,13 +228,132 @@ class StorageService {
     return log.fold<int>(0, (sum, entry) => sum + entry.ml);
   }
 
+  // ---------------- PLANIFICATION ----------------
+
   static Future<String?> getPlanDay() async {
     final prefs = await _prefs();
+
     return prefs.getString(_planDayKey);
   }
 
   static Future<void> setPlanDay(String value) async {
     final prefs = await _prefs();
+
     await prefs.setString(_planDayKey, value);
+  }
+
+  // ---------------- MEDICAMENTS ----------------
+
+  static Future<List<Medication>> getMedications() async {
+    final prefs = await _prefs();
+
+    final raw = prefs.getStringList(_medicationsKey) ?? const <String>[];
+
+    return raw
+        .map((item) {
+          try {
+            return Medication.fromJson(
+              jsonDecode(item) as Map<String, dynamic>,
+            );
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<Medication>()
+        .toList();
+  }
+
+  static Future<void> saveMedication(Medication medication) async {
+    final medications = await getMedications();
+
+    final index = medications.indexWhere((item) => item.id == medication.id);
+
+    if (index == -1) {
+      medications.add(medication);
+    } else {
+      medications[index] = medication;
+    }
+
+    await _writeMedications(medications);
+  }
+
+  static Future<void> deleteMedication(String medicationId) async {
+    final medications = await getMedications();
+
+    medications.removeWhere((item) => item.id == medicationId);
+
+    await _writeMedications(medications);
+  }
+
+  static Future<void> _writeMedications(List<Medication> medications) async {
+    final prefs = await _prefs();
+
+    await prefs.setStringList(
+      _medicationsKey,
+      medications.map((item) => jsonEncode(item.toJson())).toList(),
+    );
+  }
+
+  // ---------------- HISTORIQUE MEDICAMENTS ----------------
+
+  static Future<List<MedicationDoseLog>> getMedicationLogs({
+    DateTime? date,
+  }) async {
+    final prefs = await _prefs();
+
+    final raw = prefs.getStringList(_medicationLogsKey) ?? const <String>[];
+
+    final logs = raw
+        .map((item) {
+          try {
+            return MedicationDoseLog.fromJson(
+              jsonDecode(item) as Map<String, dynamic>,
+            );
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<MedicationDoseLog>()
+        .toList();
+
+    if (date == null) return logs;
+
+    final key = dayKey(date);
+
+    return logs.where((log) => dayKey(log.scheduledAt) == key).toList();
+  }
+
+  static Future<void> saveMedicationDoseLog(MedicationDoseLog newLog) async {
+    final prefs = await _prefs();
+
+    final raw = List<String>.from(
+      prefs.getStringList(_medicationLogsKey) ?? const <String>[],
+    );
+
+    final logs = raw
+        .map((item) {
+          try {
+            return MedicationDoseLog.fromJson(
+              jsonDecode(item) as Map<String, dynamic>,
+            );
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<MedicationDoseLog>()
+        .toList();
+
+    logs.removeWhere(
+      (log) =>
+          log.medicationId == newLog.medicationId &&
+          log.scheduledAt == newLog.scheduledAt,
+    );
+
+    logs.add(newLog);
+
+    await prefs.setStringList(
+      _medicationLogsKey,
+      logs.map((log) => jsonEncode(log.toJson())).toList(),
+    );
   }
 }
