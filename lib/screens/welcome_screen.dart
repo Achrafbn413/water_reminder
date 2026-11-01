@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/user_profile.dart';
-import '../widgets/water_wave.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 
@@ -16,16 +15,24 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  )..repeat(reverse: true);
+  static const Color cyan = Color(0xFF43D9F5);
 
+  late final AnimationController _controller;
   bool _opening = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+  }
+
+  @override
   void dispose() {
-    _pulseController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -36,7 +43,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 650),
+        transitionDuration: const Duration(milliseconds: 700),
         pageBuilder: (_, animation, secondaryAnimation) {
           return widget.profile == null
               ? const OnboardingScreen()
@@ -51,154 +58,112 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final darkTheme = ThemeData(
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF36CFFF),
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-    );
-
-    return Theme(
-      data: darkTheme,
-      child: Scaffold(
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF061526), Color(0xFF0A2944), Color(0xFF06111F)],
-            ),
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF061526), Color(0xFF0B3557), Color(0xFF071B30)],
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  const Spacer(),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              children: [
+                const Spacer(),
 
-                  // Logo
-                  const Icon(
-                    Icons.water_drop_rounded,
-                    color: Color(0xFF50D9FF),
-                    size: 34,
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // Welcome title
-                  const Text(
-                    'Bienvenue',
-                    style: TextStyle(
-                      fontSize: 38,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -1,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  const Text(
-                    'Prenez soin de vous,\nune gorgée à la fois.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.6,
-                      color: Color(0xFFB6CDDF),
-                    ),
-                  ),
-
-                  const SizedBox(height: 55),
-
-                  // Animated water button
-                  AnimatedBuilder(
-                    animation: _pulseController,
+                // LOGO CLIQUABLE
+                GestureDetector(
+                  onTap: _enterApp,
+                  child: AnimatedBuilder(
+                    animation: _controller,
                     builder: (context, child) {
-                      final scale = 1 + (_pulseController.value * 0.035);
+                      final scale = 1 + (_controller.value * 0.035);
 
                       return Transform.scale(scale: scale, child: child);
                     },
-                    child: GestureDetector(
-                      onTap: _enterApp,
-                      child: Container(
-                        width: 220,
-                        height: 220,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF21CFFF)
-                                  .withValues(alpha: 0.20),
-                              blurRadius: 55,
-                              spreadRadius: 12,
-                            ),
-                            BoxShadow(
-                              color: const Color(0xFF008CFF)
-                                  .withValues(alpha: 0.12),
-                              blurRadius: 90,
-                              spreadRadius: 25,
-                            ),
-                          ],
+                    child: Container(
+                      width: 210,
+                      height: 210,
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.07),
+                        border: Border.all(
+                          color: cyan.withValues(alpha: 0.35),
+                          width: 1.5,
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            const WaterWave(progress: 0.58, size: 210),
-                            const Icon(
-                              Icons.water_drop_rounded,
-                              size: 42,
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  color: Color(0xFF00CFFF),
-                                  blurRadius: 18,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cyan.withValues(alpha: 0.20),
+                            blurRadius: 55,
+                            spreadRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.water_drop_rounded,
+                        color: cyan,
+                        size: 115,
                       ),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 35),
+                const SizedBox(height: 35),
 
-                  const Text(
-                    'TOUCHER POUR COMMENCER',
-                    style: TextStyle(
-                      color: Color(0xFF72DFFF),
-                      fontSize: 11,
-                      letterSpacing: 3,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const Text(
+                  'WATER REMINDER',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3,
                   ),
+                ),
 
-                  const SizedBox(height: 12),
+                const SizedBox(height: 15),
 
-                  const Text(
-                    'Votre bien-être commence ici.',
-                    style: TextStyle(color: Color(0xFF829DB3), fontSize: 13),
+                const Text(
+                  'Prenez soin de vous,\nune gorgée à la fois.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFB6D8E9),
+                    fontSize: 17,
+                    height: 1.7,
                   ),
+                ),
 
-                  const Spacer(),
+                const SizedBox(height: 35),
 
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: Text(
-                      'WATER REMINDER',
-                      style: TextStyle(
-                        color: Color(0xFF54738C),
-                        fontSize: 10,
-                        letterSpacing: 4,
-                      ),
-                    ),
+                const Text(
+                  'TOUCHEZ LE LOGO POUR CONTINUER',
+                  style: TextStyle(
+                    color: Color(0xFF83CDE5),
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
+
+                const Spacer(),
+
+                const Text(
+                  'HYDRATATION • BIEN-ÊTRE • HABITUDE',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF829DB3),
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+              ],
             ),
           ),
         ),
