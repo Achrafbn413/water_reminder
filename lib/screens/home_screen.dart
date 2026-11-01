@@ -9,6 +9,8 @@ import '../widgets/water_wave.dart';
 import 'onboarding_screen.dart';
 import 'stats_screen.dart';
 import 'calendar_screen.dart';
+import 'achievements_screen.dart';
+import 'plant_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserProfile profile;
@@ -751,7 +753,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                     const SizedBox(height: 22),
 
-                    // ACCÈS AUX AUTRES ÉCRANS
+                    // ACCES AUX AUTRES ECRANS
                     Row(
                       children: [
                         Expanded(
@@ -800,6 +802,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // MES RECOMPENSES
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: const CircleAvatar(
+                          backgroundColor: Color(0xFFFFF3CD),
+                          child: Icon(Icons.emoji_events, color: Colors.orange),
+                        ),
+                        title: const Text(
+                          'Mes récompenses',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('XP, niveaux et badges'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 17),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AchievementsScreen(profile: widget.profile),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // MA PLANTE VIRTUELLE
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: const CircleAvatar(
+                          backgroundColor: Color(0xFFE8F5E9),
+                          child: Icon(Icons.eco, color: Colors.green),
+                        ),
+                        title: const Text(
+                          'Ma plante virtuelle',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text(
+                          'Fais grandir ta plante grâce à ton hydratation',
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 17),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PlantScreen(profile: widget.profile),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
